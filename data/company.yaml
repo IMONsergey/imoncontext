@@ -1,0 +1,141 @@
+schema_version: "0.1"
+context_version: "0.1.0"
+last_updated: "2026-08-06"
+status: "working_canonical"
+
+company:
+  name: "IMON"
+  category: "strategic_brand_and_business_communication_partner"
+  primary_definition: "IMON — стратегический партнёр по развитию бренда и бизнес-коммуникации."
+  working_description: "Работаем с тем, как бизнес выглядит, звучит и объясняет свою ценность: собираем смысл, образ и коммуникацию в единую систему."
+  strategic_role: "Бутиковый стратегический партнёр для компаний в точке перехода на следующий уровень."
+  legacy_primary_definition: "B2B digital-агентство полного цикла"
+  legacy_definition_status: "deprecated_as_primary_positioning"
+
+positioning:
+  central_problem: "Бизнес развивается быстрее, чем его бренд, внешний образ и коммуникационная система."
+  value_mechanism:
+    - "собрать смысл"
+    - "выстроить визуальный язык"
+    - "структурировать коммуникацию"
+    - "связать инструменты в единую систему"
+  business_outcomes:
+    - "ясность"
+    - "доверие"
+    - "соответствие реальному масштабу"
+    - "понятность сложного продукта"
+    - "управляемость коммуникации"
+    - "основа для следующего этапа развития"
+
+primary_audience:
+  segments:
+    - "зрелые B2B-компании"
+    - "технологические бизнесы"
+  states:
+    - "трансформация"
+    - "масштабирование"
+    - "выход на новый рынок"
+    - "изменение продуктовой структуры"
+    - "необходимость объяснить сложный продукт"
+  existing_assets:
+    - "продукт"
+    - "команда"
+    - "рынок"
+    - "опыт и экспертиза"
+  startup_policy: "secondary_when_ready_for_depth_and_investment"
+
+brand_character:
+  - "спокойствие"
+  - "интеллектуальность"
+  - "аналитический подход"
+  - "зрелость"
+  - "принципиальность"
+  - "внутренняя амбиция"
+  - "тихая уверенность"
+
+tone_of_voice:
+  traits:
+    - "calm"
+    - "precise"
+    - "structured"
+    - "confident"
+    - "intelligent_but_clear"
+    - "businesslike"
+    - "honest"
+  principle: "Мы не продаём через шум — мы объясняем через смысл, структуру и пользу для бизнеса."
+  text_logic:
+    - "business_situation"
+    - "gap_or_problem"
+    - "system_solution"
+    - "imon_role"
+    - "business_change"
+  preferred_cta: "Обсудить задачу"
+  avoid:
+    - "вау"
+    - "уникальный"
+    - "топовый"
+    - "продающий"
+    - "прорывной"
+    - "быстро и недорого"
+    - "команда профессионалов"
+    - "лучшие решения"
+
+capabilities:
+  strategy_meaning_content:
+    - "исследования и аналитика"
+    - "позиционирование"
+    - "платформа бренда"
+    - "коммуникационная стратегия"
+    - "структура и контент"
+  brand_identity:
+    - "бренд-концепция"
+    - "логотип и айдентика"
+    - "визуальный язык"
+    - "брендбук"
+    - "дизайн носителей"
+  presentations:
+    - "сценарий и структура"
+    - "работа с контентом"
+    - "визуальная концепция"
+    - "дизайн слайдов"
+    - "шаблоны и анимация"
+  sites_digital:
+    - "аналитика и структура"
+    - "UX-прототипы"
+    - "UI-дизайн"
+    - "разработка"
+    - "поддержка и развитие"
+
+partnership_models:
+  - "team_extension"
+  - "project_end_to_end"
+  - "white_label"
+  - "joint_client_work"
+  - "referral"
+
+claims:
+  years_experience:
+    value: "10+"
+    status: "source_claim_requires_periodic_verification"
+  projects_count:
+    value: "250+"
+    status: "source_claim_requires_periodic_verification"
+
+contacts:
+  telegram: "@imonagency"
+  email: "info@imon.agency"
+
+working_territories:
+  - id: "next_level"
+    phrase: "Следующий уровень"
+    status: "working_not_final_slogan"
+  - id: "boutique_partner"
+    phrase: "Бутиковый стратегический партнёр"
+    status: "approved_for_contextual_use"
+
+source_priority:
+  - "context/decisions.md"
+  - "context/core.md"
+  - "IMON Tone of Voice Guide v1.0"
+  - "Платформа бренда IMON"
+  - "Канал-специфичные презентации и коммерческие материалы"
