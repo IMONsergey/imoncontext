@@ -1,0 +1,123 @@
+on>
+        </section>` : ""}
+      <section id="method" class="panel resume-card" hidden>
+        <div>
+          <strong>Что будет на выходе</strong>
+          <p>Профиль зрелости, наиболее вероятная модель IMON, сильные стороны, ограничения, первичные приоритеты и JSON-пакет, который можно зафиксировать в репозитории.</p>
+        </div>
+      </section>
+    `;
+
+    document.getElementById("startButton").addEventListener("click", startTest);
+    document.getElementById("resumeButton")?.addEventListener("click", startTest);
+    document.getElementById("viewMethodButton").addEventListener("click", () => {
+      const method = document.getElementById("method");
+      method.hidden = !method.hidden;
+      if (!method.hidden) method.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+
+  function startTest() {
+    state.screen = "test";
+    saveState();
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function renderTest() {
+    const section = data.sections[state.sectionIndex];
+    const questions = visibleQuestions(section.id);
+    const completion = overallCompletion();
+    const local = sectionCompletion(section.id);
+
+    app.innerHTML = `
+      <div class="test-layout">
+        <aside class="panel sidebar">
+          <div class="progress-block">
+            <div class="progress-row"><strong>${completion.percent}%</strong><span>${completion.answered}/${completion.required}</span></div>
+            <div class="progress-track"><div class="progress-fill" style="width:${completion.percent}%"></div></div>
+          </div>
+          <nav class="section-nav" aria-label="Разделы диагностики">
+            ${data.sections.map((item, index) => {
+              const status = sectionCompletion(item.id);
+              return `<button type="button" data-section-index="${index}" class="${index === state.sectionIndex ? "active" : ""} ${status.complete ? "done" : ""}">${index + 1}. ${escapeHtml(item.title)}</button>`;
+            }).join("")}
+          </nav>
+        </aside>
+
+        <section class="question-stage">
+          <header class="panel section-header">
+            <p class="section-kicker">Блок ${state.sectionIndex + 1} из ${data.sections.length} · ${local.answered}/${local.required} обязательных</p>
+            <h2>${escapeHtml(section.title)}</h2>
+            <p>${escapeHtml(section.description)}</p>
+          </header>
+
+          <div class="question-list">
+            ${questions.map((question, index) => renderQuestion(question, index)).join("")}
+          </div>
+
+          <div class="stage-actions">
+            <button class="ghost-button" id="introButton" type="button">К описанию</button>
+            <div>
+              <button class="secondary-button" id="backButton" type="button" ${state.sectionIndex === 0 ? "disabled" : ""}>Назад</button>
+              <button class="primary-button" id="nextButton" type="button">${state.sectionIndex === data.sections.length - 1 ? "Получить результат" : "Следующий блок"}</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    `;
+
+    bindQuestionEvents(questions);
+    document.querySelectorAll("[data-section-index]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.sectionIndex = Number(button.dataset.sectionIndex);
+        state.validationAttempted = false;
+        saveState();
+        render();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
+    document.getElementById("introButton").addEventListener("click", () => {
+      state.screen = "intro";
+      saveState();
+      render();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    document.getElementById("backButton").addEventListener("click", () => moveSection(-1));
+    document.getElementById("nextButton").addEventListener("click", onNext);
+  }
+
+  function renderQuestion(question, index) {
+    const missing = state.validationAttempted && question.required && !hasAnswer(question);
+    return `
+      <article class="panel question-card ${missing ? "is-missing" : ""}" id="question-${escapeHtml(question.id)}">
+        <div class="question-meta">
+          <span>${String(index + 1).padStart(2, "0")}</span>
+          ${question.required ? '<span class="required-badge">Обязательный вопрос</span>' : '<span>Необязательно</span>'}
+        </div>
+        <h3 class="question-title">${escapeHtml(question.title)}</h3>
+        ${question.help ? `<p class="question-help">${escapeHtml(question.help)}</p>` : ""}
+        ${renderInput(question)}
+        <div class="validation-note">Нужен ответ, чтобы завершить этот блок.</div>
+      </article>
+    `;
+  }
+
+  function renderInput(question) {
+    const answer = state.answers[question.id];
+    if (question.type === "single" || question.type === "multi") {
+      const selected = question.type === "multi" ? (Array.isArray(answer) ? answer : []) : [answer];
+      return `
+        <div class="options-grid" role="${question.type === "single" ? "radiogroup" : "group"}">
+          ${question.options.map((option) => {
+            const isSelected = selected.includes(option.id);
+            return `
+              <label class="option-card ${question.type === "multi" ? "checkbox" : ""} ${isSelected ? "selected" : ""}" data-option-card>
+                <input type="${question.type === "single" ? "radio" : "checkbox"}" name="${escapeHtml(question.id)}" value="${escapeHtml(option.id)}" ${isSelected ? "checked" : ""}>
+                <span class="option-indicator">✓</span>
+                <span class="option-copy"><strong>${escapeHtml(option.label)}</strong>${option.note ? `<small>${escapeHtml(option.note)}</small>` : ""}</span>
+              </label>
+            `;
+          }).join("")}
+        </div>
+        ${question.maxSelections ? `<div cl
