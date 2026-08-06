@@ -8,32 +8,55 @@ permissions:
   contents: write
   issues: write
 
+concurrency:
+  group: imon-diagnostic-submissions
+  cancel-in-progress: false
+
 jobs:
   capture:
-    if: startsWith(github.event.issue.title, '[IMON Diagnostic]')
+    if: >-
+      startsWith(github.event.issue.title, '[IMON Diagnostic]') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
     runs-on: ubuntu-latest
     steps:
       - name: Validate and commit submission
         uses: actions/github-script@v7
         with:
           script: |
+            const zlib = require('zlib');
             const issue = context.payload.issue;
             const body = issue.body || '';
-            const match = body.match(/<!-- IMON_DIAGNOSTIC_V1 -->\s*```json\s*([\s\S]*?)\s*```/);
+            const gzipMatch = body.match(/<!-- IMON_DIAGNOSTIC_V1_GZIP -->\s*```(?:text)?\s*([\s\S]*?)\s*```/);
+            const jsonMatch = body.match(/<!-- IMON_DIAGNOSTIC_V1 -->\s*```json\s*([\s\S]*?)\s*```/);
 
-            if (!match) {
+            if (!gzipMatch && !jsonMatch) {
               await github.rest.issues.createComment({
                 ...context.repo,
                 issue_number: issue.number,
-                body: 'Не найден корректный пакет `IMON_DIAGNOSTIC_V1`. Результат не сохранён.'
+                body: 'Не найден корректный пакет диагностики. Результат не сохранён.'
               });
               core.setFailed('Diagnostic payload marker not found');
               return;
             }
 
+            let rawPayload;
+            try {
+              rawPayload = gzipMatch
+                ? zlib.gunzipSync(Buffer.from(gzipMatch[1].replace(/\s/g, ''), 'base64')).toString('utf8')
+                : jsonMatch[1];
+            } catch (error) {
+              core.setFailed(`Не удалось распаковать пакет: ${error.message}`);
+              return;
+            }
+
+            if (rawPayload.length > 250000) {
+              core.setFailed('Diagnostic payload is too large');
+              return;
+            }
+
             let payload;
             try {
-              payload = JSON.parse(match[1]);
+              payload = JSON.parse(rawPayload);
             } catch (error) {
               await github.rest.issues.createComment({
                 ...context.repo,
@@ -44,13 +67,19 @@ jobs:
               return;
             }
 
-            if (payload.schema !== 'imon.scale-diagnostic.v1' || !payload.result || !payload.answers) {
+            if (
+              payload.schema !== 'imon.scale-diagnostic.v1' ||
+              payload.repository !== `${context.repo.owner}/${context.repo.repo}` ||
+              !payload.result ||
+              !payload.answers ||
+              typeof payload.answers !== 'object'
+            ) {
               core.setFailed('Unexpected diagnostic schema');
               return;
             }
 
             const safeId = String(payload.submissionId || `issue-${issue.number}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
-            const date = String(payload.createdAt || new Date().toISOString()).slice(0, 10);
+            const date = String(payload.createdAt || new Date().toISOString()).slice(0, 10).replace(/[^0-9-]/g, '');
             const basePath = `submissions/diagnostics/${date}-${safeId}`;
             const jsonPath = `${basePath}.json`;
             const mdPath = `${basePath}.md`;
@@ -72,9 +101,9 @@ jobs:
               '',
               '## Ответы',
               '',
-              '```json',
+              '````json',
               JSON.stringify(payload.answers, null, 2),
-              '```',
+              '````',
               ''
             ].join('\n');
 
