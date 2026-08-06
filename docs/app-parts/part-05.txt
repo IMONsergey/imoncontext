@@ -26,19 +26,51 @@ ment.getElementById("copyButton").addEventListener("click", copySummary);
     };
   }
 
-  function submitToGitHub() {
+  async function submitToGitHub() {
     const payload = buildPayload({ includeSensitive: false });
-    const json = JSON.stringify(payload);
-    const marker = `<!-- IMON_DIAGNOSTIC_V1 -->\n\n\`\`\`json\n${json}\n\`\`\``;
+    const packet = await encodeGitHubPacket(payload);
+    const marker = `<!-- ${packet.marker} -->\n\n\`\`\`${packet.language}\n${packet.content}\n\`\`\``;
     const date = new Date().toISOString().slice(0, 10);
     const title = `[IMON Diagnostic] ${date} — ${payload.result.scenario.title}`;
-    const url = `https://github.com/${data.repository}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(marker)}`;
+    const baseUrl = `https://github.com/${data.repository}/issues/new?title=${encodeURIComponent(title)}`;
+    const url = `${baseUrl}&body=${encodeURIComponent(marker)}`;
+
     if (url.length > 7800) {
-      toast("Ответы слишком объёмные для безопасной передачи через URL. Скачай JSON и загрузи его в чат или репозиторий.");
+      try {
+        await navigator.clipboard.writeText(marker);
+        window.open(baseUrl, "_blank", "noopener,noreferrer");
+        toast("Пакет скопирован. Вставь его в описание Issue и нажми Submit new issue.");
+      } catch {
+        toast("Пакет слишком объёмный для URL. Скачай JSON и передай его через чат.");
+      }
       return;
     }
+
     window.open(url, "_blank", "noopener,noreferrer");
     toast("Открылся GitHub. Нажми Submit new issue — дальше результат сохранит GitHub Action.");
+  }
+
+  async function encodeGitHubPacket(payload) {
+    const json = JSON.stringify(payload);
+    if (!("CompressionStream" in window)) {
+      return { marker: "IMON_DIAGNOSTIC_V1", language: "json", content: json };
+    }
+
+    try {
+      const compressed = new Blob([json], { type: "application/json" })
+        .stream()
+        .pipeThrough(new CompressionStream("gzip"));
+      const bytes = new Uint8Array(await new Response(compressed).arrayBuffer());
+      let binary = "";
+      const chunk = 0x8000;
+      for (let index = 0; index < bytes.length; index += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
+      }
+      return { marker: "IMON_DIAGNOSTIC_V1_GZIP", language: "text", content: btoa(binary) };
+    } catch (error) {
+      console.warn("Не удалось сжать GitHub-пакет", error);
+      return { marker: "IMON_DIAGNOSTIC_V1", language: "json", content: json };
+    }
   }
 
   function downloadPayload() {
