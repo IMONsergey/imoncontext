@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Стратегическая диагностика IMON: позиционирование, маркетинг, международный выход и масштабирование.">
+  <meta name="theme-color" content="#0b0d0c">
+  <title>IMON Scale Diagnostic</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="IMON Scale Diagnostic">
+      <span class="brand-mark">I</span>
+      <span>IMON / Scale Diagnostic</span>
+    </a>
+    <button class="ghost-button" id="resetButton" type="button">Сбросить</button>
+  </header>
+
+  <main id="app" class="app-shell" aria-live="polite"></main>
+
+  <noscript>
+    <div class="noscript">Для прохождения диагностики нужен JavaScript.</div>
+  </noscript>
+
+  <script src="./questions.js"></script>
+  <script src="./questions/vision.js"></script>
+  <script src="./questions/positioning.js"></script>
+  <script src="./questions/market.js"></script>
+  <script src="./questions/marketing.js"></script>
+  <script src="./questions/international.js"></script>
+  <script src="./questions/operations.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

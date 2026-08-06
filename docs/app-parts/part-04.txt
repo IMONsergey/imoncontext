@@ -1,0 +1,107 @@
+ores(selected?.scores, raw);
+        addSignals(selected?.signals, signals);
+      } else if (question.type === "multi") {
+        const selectedIds = Array.isArray(answer) ? answer : [];
+        const selected = question.options.filter((option) => selectedIds.includes(option.id));
+        selected.forEach((option) => { addScores(option.scores, raw); addSignals(option.signals, signals); });
+        const limit = question.maxSelections || question.options.length;
+        Object.keys(data.dimensions).forEach((dimension) => {
+          const values = question.options.map((option) => Number(option.scores?.[dimension] || 0)).sort((a, b) => b - a).slice(0, limit);
+          max[dimension] += values.reduce((sum, value) => sum + value, 0);
+        });
+      } else if (question.type === "scale" && question.dimension) {
+        const value = Number(answer ?? question.defaultValue ?? question.min);
+        const normalized = (value - question.min) / (question.max - question.min);
+        raw[question.dimension] += question.inverseScore ? (1 - normalized) * 10 : normalized * 10;
+        max[question.dimension] += 10;
+      }
+    });
+
+    const scores = {};
+    Object.keys(data.dimensions).forEach((dimension) => {
+      scores[dimension] = max[dimension] ? Math.round((raw[dimension] / max[dimension]) * 100) : 0;
+    });
+
+    const scenarioId = Object.entries(signals).sort((a, b) => b[1] - a[1])[0]?.[0] || "premium_boutique";
+    const sortedDimensions = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+    const strengths = sortedDimensions.slice(0, 2).map(([key, score]) => `${data.dimensions[key]} — ${score}%`);
+    const risks = sortedDimensions.slice(-3).reverse().map(([key, score]) => `${data.dimensions[key]} — ${score}%`);
+    const overall = Math.round(Object.values(scores).reduce((sum, value) => sum + value, 0) / Object.keys(scores).length);
+
+    return {
+      overall,
+      scores,
+      scenarioId,
+      scenario: data.scenarios[scenarioId],
+      strengths,
+      risks,
+      generatedAt: new Date().toISOString()
+    };
+  }
+
+  function addScores(source, target) {
+    if (!source) return;
+    Object.entries(source).forEach(([key, value]) => { target[key] = (target[key] || 0) + Number(value || 0); });
+  }
+
+  function addMax(source, target) {
+    if (!source) return;
+    Object.entries(source).forEach(([key, value]) => { target[key] = (target[key] || 0) + Number(value || 0); });
+  }
+
+  function addSignals(list, target) {
+    (list || []).forEach((signal) => { target[signal] = (target[signal] || 0) + 1; });
+  }
+
+  function renderResults() {
+    const result = state.result || calculateResult();
+    state.result = result;
+    saveState();
+
+    app.innerHTML = `
+      <section class="results-grid">
+        <div class="panel results-main">
+          <p class="eyebrow">Предварительный профиль IMON</p>
+          <h2>${escapeHtml(result.scenario.title)}</h2>
+          <div class="score-total"><strong>${result.overall}</strong><span>из 100<br>общая готовность</span></div>
+          <div class="scenario-card">
+            <h3>Наиболее согласованная модель</h3>
+            <p>${escapeHtml(result.scenario.description)}</p>
+          </div>
+          <h3 style="margin-top:28px">Что видно уже сейчас</h3>
+          <ul class="insight-list">
+            <li><strong>Сильные стороны:</strong> ${result.strengths.map(escapeHtml).join("; ")}.</li>
+            <li><strong>Главные зоны риска:</strong> ${result.risks.map(escapeHtml).join("; ")}.</li>
+            <li>Это не готовая стратегия. Профиль показывает, какие решения согласованы между собой, а где ответы требуют отдельного обсуждения и проверки фактами.</li>
+          </ul>
+          <div class="result-actions">
+            <button class="primary-button" id="submitButton" type="button" disabled>Зафиксировать в GitHub</button>
+            <button class="secondary-button" id="downloadButton" type="button">Скачать JSON</button>
+            <button class="secondary-button" id="copyButton" type="button">Скопировать итог</button>
+            <button class="ghost-button" id="editButton" type="button">Вернуться к ответам</button>
+          </div>
+          <div class="public-warning"><strong>Публичность:</strong> отправка создаст GitHub Issue с ответами, после чего GitHub Action сохранит результат в репозитории. Пока репозиторий публичный, issue и сохранённый файл будут доступны всем.</div>
+          <label class="confirm-row"><input type="checkbox" id="publicConfirm"> <span>Я понимаю, что репозиторий публичный, и подтверждаю отправку этих ответов. Чувствительные финансовые поля будут исключены из GitHub-пакета.</span></label>
+          <div class="answer-review">
+            <details><summary>Посмотреть технический пакет</summary><pre>${escapeHtml(JSON.stringify(buildPayload({ includeSensitive: false }), null, 2))}</pre></details>
+          </div>
+        </div>
+        <aside class="panel results-side">
+          <p class="eyebrow">Профиль готовности</p>
+          <div class="dimension-list">
+            ${Object.entries(result.scores).map(([key, value]) => `
+              <div class="dimension-item">
+                <div class="dimension-head"><strong>${escapeHtml(data.dimensions[key])}</strong><span>${value}%</span></div>
+                <div class="dimension-bar"><i style="width:${value}%"></i></div>
+              </div>`).join("")}
+          </div>
+        </aside>
+      </section>
+    `;
+
+    const confirm = document.getElementById("publicConfirm");
+    const submitButton = document.getElementById("submitButton");
+    confirm.addEventListener("change", () => { submitButton.disabled = !confirm.checked; });
+    submitButton.addEventListener("click", submitToGitHub);
+    document.getElementById("downloadButton").addEventListener("click", downloadPayload);
+    docu

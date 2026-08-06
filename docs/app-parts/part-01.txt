@@ -1,0 +1,132 @@
+(() => {
+  "use strict";
+
+  const data = window.IMON_DIAGNOSTIC;
+  const app = document.getElementById("app");
+  const resetButton = document.getElementById("resetButton");
+  const STORAGE_KEY = `imon-scale-diagnostic:${data.version}`;
+  const SENSITIVE_IDS = new Set(data.questions.filter((q) => q.sensitive).map((q) => q.id));
+
+  const initialState = () => ({
+    version: data.version,
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    screen: "intro",
+    sectionIndex: 0,
+    answers: {},
+    validationAttempted: false,
+    result: null
+  });
+
+  let state = loadState();
+
+  resetButton.addEventListener("click", () => {
+    if (!window.confirm("Удалить все ответы и начать диагностику заново?")) return;
+    localStorage.removeItem(STORAGE_KEY);
+    state = initialState();
+    render();
+    toast("Ответы удалены");
+  });
+
+  function loadState() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (saved && saved.version === data.version) return { ...initialState(), ...saved };
+    } catch (error) {
+      console.warn("Не удалось восстановить прогресс", error);
+    }
+    return initialState();
+  }
+
+  function saveState() {
+    state.updatedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function visibleQuestions(sectionId = null) {
+    return data.questions.filter((question) => {
+      if (sectionId && question.section !== sectionId) return false;
+      return evaluateCondition(question.showIf);
+    });
+  }
+
+  function evaluateCondition(condition) {
+    if (!condition) return true;
+    const answer = state.answers[condition.questionId];
+    if (condition.exists) return answer !== undefined && answer !== null && answer !== "";
+    if (condition.equals !== undefined) return answer === condition.equals;
+    if (condition.includes !== undefined) return Array.isArray(answer) && answer.includes(condition.includes);
+    if (condition.min !== undefined) return Number(answer) >= condition.min;
+    return true;
+  }
+
+  function hasAnswer(question) {
+    const answer = state.answers[question.id];
+    if (question.type === "multi") return Array.isArray(answer) && answer.length > 0;
+    if (question.type === "scale") return Number.isFinite(Number(answer));
+    if (question.type === "number") return answer !== undefined && answer !== null && answer !== "";
+    return typeof answer === "string" ? answer.trim().length > 0 : answer !== undefined && answer !== null;
+  }
+
+  function sectionCompletion(sectionId) {
+    const required = visibleQuestions(sectionId).filter((q) => q.required);
+    const answered = required.filter(hasAnswer);
+    return { required: required.length, answered: answered.length, complete: required.length === answered.length };
+  }
+
+  function overallCompletion() {
+    const required = visibleQuestions().filter((q) => q.required);
+    const answered = required.filter(hasAnswer);
+    return { required: required.length, answered: answered.length, percent: required.length ? Math.round((answered.length / required.length) * 100) : 0 };
+  }
+
+  function render() {
+    resetButton.hidden = state.screen === "intro" && Object.keys(state.answers).length === 0;
+    if (state.screen === "intro") renderIntro();
+    else if (state.screen === "test") renderTest();
+    else renderResults();
+  }
+
+  function renderIntro() {
+    const hasProgress = Object.keys(state.answers).length > 0;
+    const completion = overallCompletion();
+    app.innerHTML = `
+      <section class="hero">
+        <div class="panel hero-main">
+          <p class="eyebrow">Стратегическая диагностика · v${escapeHtml(data.version)}</p>
+          <h1>Не тест личности. Карта следующего IMON.</h1>
+          <p class="lead">Диагностика фиксирует реальные амбиции, ограничения и решения по позиционированию, маркетингу, международному выходу и масштабированию. В конце формируется стратегический профиль и структурированный контекст для GitHub.</p>
+          <div class="hero-actions">
+            <button class="primary-button" id="startButton" type="button">${hasProgress ? "Продолжить" : "Начать диагностику"}</button>
+            <button class="secondary-button" id="viewMethodButton" type="button">Как устроен результат</button>
+          </div>
+        </div>
+        <aside class="panel hero-side">
+          <div>
+            <p class="eyebrow">Состав</p>
+            <div class="metric-list">
+              <div class="metric"><strong>${data.sections.length}</strong><span>стратегических блоков</span></div>
+              <div class="metric"><strong>${data.questions.length}</strong><span>вопросов с ветвлением</span></div>
+              <div class="metric"><strong>7</strong><span>измерений готовности</span></div>
+              <div class="metric"><strong>5</strong><span>моделей масштабирования</span></div>
+            </div>
+          </div>
+          <div class="notice"><strong>Важно:</strong> репозиторий IMON сейчас публичный. Не указывай чувствительные финансовые или договорные данные, если не готов сделать их публичными. Черновик хранится только в браузере.</div>
+        </aside>
+      </section>
+      ${hasProgress ? `
+        <section class="panel resume-card">
+          <div>
+            <strong>Сохранённый прогресс: ${completion.percent}%</strong>
+            <p>${completion.answered} из ${completion.required} обязательных ответов. Последнее изменение: ${formatDate(state.updatedAt)}.</p>
+          </div>
+          <button class="secondary-button" id="resumeButton" type="button">Вернуться к вопросам</butt

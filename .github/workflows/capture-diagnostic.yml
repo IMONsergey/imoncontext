@@ -1,0 +1,131 @@
+name: Capture IMON diagnostic submission
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  capture:
+    if: startsWith(github.event.issue.title, '[IMON Diagnostic]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate and commit submission
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || '';
+            const match = body.match(/<!-- IMON_DIAGNOSTIC_V1 -->\s*```json\s*([\s\S]*?)\s*```/);
+
+            if (!match) {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: issue.number,
+                body: 'Не найден корректный пакет `IMON_DIAGNOSTIC_V1`. Результат не сохранён.'
+              });
+              core.setFailed('Diagnostic payload marker not found');
+              return;
+            }
+
+            let payload;
+            try {
+              payload = JSON.parse(match[1]);
+            } catch (error) {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: issue.number,
+                body: `JSON не прошёл проверку: ${error.message}`
+              });
+              core.setFailed(error.message);
+              return;
+            }
+
+            if (payload.schema !== 'imon.scale-diagnostic.v1' || !payload.result || !payload.answers) {
+              core.setFailed('Unexpected diagnostic schema');
+              return;
+            }
+
+            const safeId = String(payload.submissionId || `issue-${issue.number}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
+            const date = String(payload.createdAt || new Date().toISOString()).slice(0, 10);
+            const basePath = `submissions/diagnostics/${date}-${safeId}`;
+            const jsonPath = `${basePath}.json`;
+            const mdPath = `${basePath}.md`;
+            const scores = payload.result.scores || {};
+            const scenario = payload.result.scenario?.title || payload.result.scenarioId || 'Не определён';
+
+            const markdown = [
+              '# IMON Scale Diagnostic',
+              '',
+              `- **Дата:** ${payload.createdAt || new Date().toISOString()}`,
+              `- **Версия:** ${payload.diagnosticVersion || 'unknown'}`,
+              `- **Сценарий:** ${scenario}`,
+              `- **Общая готовность:** ${payload.result.overall ?? '—'}/100`,
+              `- **Источник:** #${issue.number}`,
+              '',
+              '## Профиль готовности',
+              '',
+              ...Object.entries(scores).map(([key, value]) => `- ${key}: ${value}%`),
+              '',
+              '## Ответы',
+              '',
+              '```json',
+              JSON.stringify(payload.answers, null, 2),
+              '```',
+              ''
+            ].join('\n');
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const ref = await github.rest.git.getRef({ owner, repo, ref: 'heads/main' });
+            const parentSha = ref.data.object.sha;
+            const parent = await github.rest.git.getCommit({ owner, repo, commit_sha: parentSha });
+
+            const jsonBlob = await github.rest.git.createBlob({
+              owner, repo,
+              content: Buffer.from(JSON.stringify(payload, null, 2) + '\n').toString('base64'),
+              encoding: 'base64'
+            });
+            const mdBlob = await github.rest.git.createBlob({
+              owner, repo,
+              content: Buffer.from(markdown).toString('base64'),
+              encoding: 'base64'
+            });
+
+            const tree = await github.rest.git.createTree({
+              owner, repo,
+              base_tree: parent.data.tree.sha,
+              tree: [
+                { path: jsonPath, mode: '100644', type: 'blob', sha: jsonBlob.data.sha },
+                { path: mdPath, mode: '100644', type: 'blob', sha: mdBlob.data.sha }
+              ]
+            });
+
+            const commit = await github.rest.git.createCommit({
+              owner, repo,
+              message: `Capture IMON diagnostic ${safeId}`,
+              tree: tree.data.sha,
+              parents: [parentSha]
+            });
+
+            await github.rest.git.updateRef({
+              owner, repo,
+              ref: 'heads/main',
+              sha: commit.data.sha
+            });
+
+            await github.rest.issues.createComment({
+              owner, repo,
+              issue_number: issue.number,
+              body: `Диагностика зафиксирована в коммите ${commit.data.html_url}.\n\nФайлы: \`${jsonPath}\` и \`${mdPath}\`.`
+            });
+
+            await github.rest.issues.update({
+              owner, repo,
+              issue_number: issue.number,
+              state: 'closed',
+              state_reason: 'completed'
+            });

@@ -1,0 +1,87 @@
+ment.getElementById("copyButton").addEventListener("click", copySummary);
+    document.getElementById("editButton").addEventListener("click", () => {
+      state.screen = "test";
+      state.sectionIndex = 0;
+      saveState();
+      render();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
+  function buildPayload({ includeSensitive = false } = {}) {
+    const answers = {};
+    Object.entries(state.answers).forEach(([key, value]) => {
+      if (!includeSensitive && SENSITIVE_IDS.has(key)) return;
+      answers[key] = value;
+    });
+    return {
+      schema: data.schema,
+      diagnosticVersion: data.version,
+      submissionId: crypto.randomUUID ? crypto.randomUUID() : `imon-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      startedAt: state.startedAt,
+      repository: data.repository,
+      result: state.result || calculateResult(),
+      answers
+    };
+  }
+
+  function submitToGitHub() {
+    const payload = buildPayload({ includeSensitive: false });
+    const json = JSON.stringify(payload);
+    const marker = `<!-- IMON_DIAGNOSTIC_V1 -->\n\n\`\`\`json\n${json}\n\`\`\``;
+    const date = new Date().toISOString().slice(0, 10);
+    const title = `[IMON Diagnostic] ${date} — ${payload.result.scenario.title}`;
+    const url = `https://github.com/${data.repository}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(marker)}`;
+    if (url.length > 7800) {
+      toast("Ответы слишком объёмные для безопасной передачи через URL. Скачай JSON и загрузи его в чат или репозиторий.");
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+    toast("Открылся GitHub. Нажми Submit new issue — дальше результат сохранит GitHub Action.");
+  }
+
+  function downloadPayload() {
+    const payload = buildPayload({ includeSensitive: true });
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `imon-scale-diagnostic-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast("JSON сохранён");
+  }
+
+  async function copySummary() {
+    const result = state.result || calculateResult();
+    const text = [
+      `IMON Scale Diagnostic — ${new Date().toLocaleDateString("ru-RU")}`,
+      `Модель: ${result.scenario.title}`,
+      `Общая готовность: ${result.overall}/100`,
+      "",
+      ...Object.entries(result.scores).map(([key, value]) => `${data.dimensions[key]}: ${value}%`),
+      "",
+      `Сильные стороны: ${result.strengths.join("; ")}`,
+      `Зоны риска: ${result.risks.join("; ")}`
+    ].join("\n");
+    await navigator.clipboard.writeText(text);
+    toast("Итог скопирован");
+  }
+
+  function formatDate(value) {
+    try { return new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); }
+    catch { return value; }
+  }
+
+  function toast(message) {
+    document.querySelector(".toast")?.remove();
+    const element = document.createElement("div");
+    element.className = "toast";
+    element.textContent = message;
+    document.body.appendChild(element);
+    window.setTimeout(() => element.remove(), 4200);
+  }
+
+  render();
+})();
