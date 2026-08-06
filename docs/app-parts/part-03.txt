@@ -1,0 +1,131 @@
+ass="limit-note">Можно выбрать до ${question.maxSelections} вариантов.</div>` : ""}
+      `;
+    }
+    if (question.type === "text") {
+      return `<textarea class="text-input" data-question-id="${escapeHtml(question.id)}" placeholder="Напиши ответ своими словами…">${escapeHtml(answer || "")}</textarea>`;
+    }
+    if (question.type === "number") {
+      return `<div class="number-row"><input class="number-input" data-question-id="${escapeHtml(question.id)}" type="number" min="0" inputmode="decimal" value="${escapeHtml(answer ?? "")}" placeholder="0">${question.suffix ? `<span>${escapeHtml(question.suffix)}</span>` : ""}</div>`;
+    }
+    if (question.type === "scale") {
+      const value = answer ?? question.defaultValue ?? question.min;
+      return `
+        <div class="scale-wrap">
+          <div class="scale-head"><span>${escapeHtml(question.min)}–${escapeHtml(question.max)}</span><output class="scale-value" id="output-${escapeHtml(question.id)}">${escapeHtml(value)}</output></div>
+          <input class="scale-input" data-question-id="${escapeHtml(question.id)}" type="range" min="${question.min}" max="${question.max}" step="1" value="${escapeHtml(value)}">
+          <div class="scale-labels"><span>${escapeHtml(question.minLabel || "Минимум")}</span><span>${escapeHtml(question.maxLabel || "Максимум")}</span></div>
+        </div>
+      `;
+    }
+    return "";
+  }
+
+  function bindQuestionEvents(questions) {
+    questions.forEach((question) => {
+      if (question.type === "single" || question.type === "multi") {
+        document.querySelectorAll(`input[name="${CSS.escape(question.id)}"]`).forEach((input) => {
+          input.addEventListener("change", () => {
+            if (question.type === "single") {
+              state.answers[question.id] = input.value;
+            } else {
+              const current = Array.isArray(state.answers[question.id]) ? [...state.answers[question.id]] : [];
+              if (input.checked && !current.includes(input.value)) {
+                if (question.maxSelections && current.length >= question.maxSelections) {
+                  input.checked = false;
+                  toast(`Можно выбрать не больше ${question.maxSelections} вариантов`);
+                  return;
+                }
+                current.push(input.value);
+              } else if (!input.checked) {
+                const index = current.indexOf(input.value);
+                if (index >= 0) current.splice(index, 1);
+              }
+              state.answers[question.id] = current;
+            }
+            saveState();
+            updateOptionStyles(question.id);
+          });
+        });
+      }
+    });
+
+    document.querySelectorAll("textarea[data-question-id], input.number-input[data-question-id]").forEach((input) => {
+      input.addEventListener("input", () => {
+        state.answers[input.dataset.questionId] = input.value;
+        saveState();
+      });
+    });
+
+    document.querySelectorAll("input.scale-input[data-question-id]").forEach((input) => {
+      if (state.answers[input.dataset.questionId] === undefined) state.answers[input.dataset.questionId] = Number(input.value);
+      input.addEventListener("input", () => {
+        state.answers[input.dataset.questionId] = Number(input.value);
+        document.getElementById(`output-${input.dataset.questionId}`).textContent = input.value;
+        saveState();
+      });
+    });
+    saveState();
+  }
+
+  function updateOptionStyles(questionId) {
+    document.querySelectorAll(`input[name="${CSS.escape(questionId)}"]`).forEach((input) => {
+      input.closest("[data-option-card]").classList.toggle("selected", input.checked);
+    });
+  }
+
+  function onNext() {
+    const section = data.sections[state.sectionIndex];
+    const missing = visibleQuestions(section.id).filter((q) => q.required && !hasAnswer(q));
+    if (missing.length) {
+      state.validationAttempted = true;
+      render();
+      requestAnimationFrame(() => document.getElementById(`question-${missing[0].id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+      toast(`Осталось обязательных вопросов: ${missing.length}`);
+      return;
+    }
+    state.validationAttempted = false;
+    if (state.sectionIndex < data.sections.length - 1) moveSection(1);
+    else finishDiagnostic();
+  }
+
+  function moveSection(direction) {
+    state.sectionIndex = Math.max(0, Math.min(data.sections.length - 1, state.sectionIndex + direction));
+    state.validationAttempted = false;
+    saveState();
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function finishDiagnostic() {
+    const allMissing = visibleQuestions().filter((q) => q.required && !hasAnswer(q));
+    if (allMissing.length) {
+      const targetSection = data.sections.findIndex((s) => s.id === allMissing[0].section);
+      state.sectionIndex = targetSection;
+      state.validationAttempted = true;
+      saveState();
+      render();
+      toast(`Не заполнено обязательных вопросов: ${allMissing.length}`);
+      return;
+    }
+    state.result = calculateResult();
+    state.screen = "results";
+    saveState();
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function calculateResult() {
+    const raw = {};
+    const max = {};
+    const signals = {};
+    Object.keys(data.dimensions).forEach((key) => { raw[key] = 0; max[key] = 0; });
+
+    visibleQuestions().forEach((question) => {
+      const answer = state.answers[question.id];
+      if (question.type === "single") {
+        const selected = question.options.find((option) => option.id === answer);
+        Object.keys(data.dimensions).forEach((dimension) => {
+          const highest = Math.max(0, ...question.options.map((option) => Number(option.scores?.[dimension] || 0)));
+          max[dimension] += highest;
+        });
+        addSc
